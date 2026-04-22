@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useServicesStore } from './stores/services'
 import { useSystemsStore } from './stores/systems'
 import { useWebSocket } from './composables/useWebSocket'
@@ -8,6 +8,7 @@ import ServiceGrid   from './components/ServiceGrid.vue'
 import ServiceModal  from './components/ServiceModal.vue'
 import ServiceDetail from './components/ServiceDetail.vue'
 import SystemModal   from './components/SystemModal.vue'
+import TvDashboard   from './components/TvDashboard.vue'
 
 const { status } = useWebSocket()
 const servicesStore = useServicesStore()
@@ -20,6 +21,17 @@ const showSystemModal  = ref(false)
 const editingSystemId  = ref<string | null>(null)
 
 const selectedId = ref<string | null>(null)
+
+const tvMode = ref(new URLSearchParams(window.location.search).has('tv'))
+
+function onKey(e: KeyboardEvent) {
+  if (e.key === 't' || e.key === 'T') {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
+    tvMode.value = !tvMode.value
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 const editingService = computed(() =>
   editingServiceId.value ? servicesStore.items[editingServiceId.value] : undefined
@@ -54,34 +66,38 @@ function selectService(id: string) {
 </script>
 
 <template>
-  <nav class="nav">
-    <span class="nav-title">Status Dashboard</span>
-    <WsIndicator :status="status" />
-    <button class="btn" @click="openAddSystem">+ System</button>
-    <button class="btn btn-primary" @click="openAddService">+ Service</button>
-  </nav>
+  <TvDashboard v-if="tvMode" />
 
-  <ServiceGrid
-    @select="selectService"
-    @editSystem="openEditSystem"
-  />
+  <template v-else>
+    <nav class="nav">
+      <span class="nav-title">Status Dashboard</span>
+      <WsIndicator :status="status" />
+      <button class="btn" @click="openAddSystem">+ System</button>
+      <button class="btn btn-primary" @click="openAddService">+ Service</button>
+    </nav>
 
-  <ServiceDetail
-    v-if="selectedId"
-    :service-id="selectedId"
-    @close="selectedId = null"
-    @edit="openEditService"
-  />
+    <ServiceGrid
+      @select="selectService"
+      @editSystem="openEditSystem"
+    />
 
-  <ServiceModal
-    v-if="showServiceModal"
-    :service="editingService"
-    @close="showServiceModal = false"
-  />
+    <ServiceDetail
+      v-if="selectedId"
+      :service-id="selectedId"
+      @close="selectedId = null"
+      @edit="openEditService"
+    />
 
-  <SystemModal
-    v-if="showSystemModal"
-    :system="editingSystem"
-    @close="showSystemModal = false"
-  />
+    <ServiceModal
+      v-if="showServiceModal"
+      :service="editingService"
+      @close="showServiceModal = false"
+    />
+
+    <SystemModal
+      v-if="showSystemModal"
+      :system="editingSystem"
+      @close="showSystemModal = false"
+    />
+  </template>
 </template>
