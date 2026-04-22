@@ -1,19 +1,16 @@
+use crate::state::AppState;
+use crate::ws::messages::WsMessage;
+use axum::extract::ws::{Message, WebSocket};
 use axum::{
     extract::{State, WebSocketUpgrade},
     response::Response,
 };
-use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast;
-use crate::state::AppState;
-use crate::ws::messages::WsMessage;
 
 pub mod messages;
 
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> Response {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -27,7 +24,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 match msg {
                     Ok(ws_msg) => {
                         if let Ok(json) = serde_json::to_string(&ws_msg) {
-                            if sender.send(Message::Text(json.into())).await.is_err() {
+                            if sender.send(Message::Text(json)).await.is_err() {
                                 break;
                             }
                         }

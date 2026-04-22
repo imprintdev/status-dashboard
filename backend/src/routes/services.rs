@@ -37,20 +37,26 @@ pub async fn list_services(
 
         let latest = sqlx::query!(
             r#"SELECT id as "id!", checked_at as "checked_at!", status as "status!",
-               response_ms, error_message
+               response_ms, error_message, detail
                FROM check_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT 1"#,
             r.id
         )
         .fetch_optional(&state.db)
         .await?;
 
-        let latest_check = latest.map(|c| serde_json::json!({
-            "id": c.id,
-            "checked_at": c.checked_at,
-            "status": c.status,
-            "response_ms": c.response_ms,
-            "error_message": c.error_message
-        }));
+        let latest_check = latest.map(|c| {
+            let detail = c.detail
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+            serde_json::json!({
+                "id": c.id,
+                "checked_at": c.checked_at,
+                "status": c.status,
+                "response_ms": c.response_ms,
+                "error_message": c.error_message,
+                "detail": detail
+            })
+        });
 
         result.push(serde_json::json!({
             "id": r.id,

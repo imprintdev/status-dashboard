@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import type { Service } from '../types'
 
@@ -96,7 +96,8 @@ function buildChart(rows: ChartRow[]) {
   })
 }
 
-function refresh() {
+async function refresh() {
+  await nextTick()
   const rows = parseRows(props.service.latest_check?.detail)
   if (rows.length > 0) buildChart(rows)
 }
@@ -104,8 +105,8 @@ function refresh() {
 onMounted(refresh)
 onBeforeUnmount(() => { chart?.destroy() })
 
-watch(() => props.service.latest_check?.detail, refresh)
-watch(chartType, refresh)
+watch(() => props.service.latest_check?.detail, refresh, { flush: 'post' })
+watch(chartType, refresh, { flush: 'post' })
 </script>
 
 <template>

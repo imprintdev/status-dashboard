@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use crate::models::check_result::CheckStatus;
-use super::{CheckError, CheckOutput, Checker, ConfigError};
+use super::{CheckError, CheckOutput, Checker, ConfigError, infer_driver};
 
 pub struct SqlQueryChecker {
-    driver: String,
+    driver: &'static str,
     connection_string: String,
     query: String,
     down_threshold: Option<Threshold>,
@@ -48,14 +48,11 @@ impl Threshold {
 
 impl SqlQueryChecker {
     pub fn from_config(config: &Value) -> Result<Self, ConfigError> {
-        let driver = config["driver"]
-            .as_str()
-            .ok_or_else(|| ConfigError::InvalidConfig("sql_query checker requires 'driver'".into()))?
-            .to_string();
         let connection_string = config["connection_string"]
             .as_str()
             .ok_or_else(|| ConfigError::InvalidConfig("sql_query checker requires 'connection_string'".into()))?
             .to_string();
+        let driver = infer_driver(&connection_string)?;
         let query = config["query"]
             .as_str()
             .ok_or_else(|| ConfigError::InvalidConfig("sql_query checker requires 'query'".into()))?
@@ -109,7 +106,7 @@ impl SqlQueryChecker {
     }
 
     async fn run_query_inner(&self) -> Result<f64, String> {
-        match self.driver.as_str() {
+        match self.driver {
             "sqlite" => {
                 let pool = sqlx::SqlitePool::connect(&self.connection_string)
                     .await
@@ -121,7 +118,7 @@ impl SqlQueryChecker {
                 pool.close().await;
                 Ok(row.0)
             }
-            "postgresql" | "postgres" => {
+            _ => {
                 let pool = sqlx::PgPool::connect(&self.connection_string)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -132,7 +129,6 @@ impl SqlQueryChecker {
                 pool.close().await;
                 Ok(row.0)
             }
-            other => Err(format!("Unsupported database driver: {other}")),
         }
     }
 }

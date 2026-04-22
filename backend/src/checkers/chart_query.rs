@@ -1,11 +1,11 @@
+use super::{CheckError, CheckOutput, Checker, ConfigError, infer_driver};
+use crate::models::check_result::CheckStatus;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use crate::models::check_result::CheckStatus;
-use super::{CheckError, CheckOutput, Checker, ConfigError};
 
 pub struct ChartQueryChecker {
-    driver: String,
+    driver: &'static str,
     connection_string: String,
     query: String,
     timeout_ms: Option<u64>,
@@ -13,20 +13,24 @@ pub struct ChartQueryChecker {
 
 impl ChartQueryChecker {
     pub fn from_config(config: &Value) -> Result<Self, ConfigError> {
-        let driver = config["driver"]
-            .as_str()
-            .ok_or_else(|| ConfigError::InvalidConfig("chart_query requires 'driver'".into()))?
-            .to_string();
         let connection_string = config["connection_string"]
             .as_str()
-            .ok_or_else(|| ConfigError::InvalidConfig("chart_query requires 'connection_string'".into()))?
+            .ok_or_else(|| {
+                ConfigError::InvalidConfig("chart_query requires 'connection_string'".into())
+            })?
             .to_string();
+        let driver = infer_driver(&connection_string)?;
         let query = config["query"]
             .as_str()
             .ok_or_else(|| ConfigError::InvalidConfig("chart_query requires 'query'".into()))?
             .to_string();
         let timeout_ms = config["timeout_ms"].as_u64();
-        Ok(Self { driver, connection_string, query, timeout_ms })
+        Ok(Self {
+            driver,
+            connection_string,
+            query,
+            timeout_ms,
+        })
     }
 }
 
@@ -70,7 +74,7 @@ impl ChartQueryChecker {
     }
 
     async fn run_query_inner(&self) -> Result<Vec<ChartRow>, String> {
-        match self.driver.as_str() {
+        match self.driver {
             "sqlite" => {
                 let pool = sqlx::SqlitePool::connect(&self.connection_string)
                     .await
@@ -79,7 +83,7 @@ impl ChartQueryChecker {
                 pool.close().await;
                 Ok(rows)
             }
-            "postgresql" | "postgres" => {
+            _ => {
                 let pool = sqlx::PgPool::connect(&self.connection_string)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -87,7 +91,6 @@ impl ChartQueryChecker {
                 pool.close().await;
                 Ok(rows)
             }
-            other => Err(format!("Unsupported driver: {other}")),
         }
     }
 
@@ -98,12 +101,22 @@ impl ChartQueryChecker {
             .await
             .map_err(|e| e.to_string())?;
 
-        raw.iter().map(|row| {
-            let label: String = row.try_get("label").map_err(|_| "missing 'label' column".to_string())?;
-            let value: f64 = row.try_get("value").map_err(|_| "missing 'value' column".to_string())?;
-            let color: Option<String> = row.try_get("color").ok();
-            Ok(ChartRow { label, value, color })
-        }).collect()
+        raw.iter()
+            .map(|row| {
+                let label: String = row
+                    .try_get("label")
+                    .map_err(|_| "missing 'label' column".to_string())?;
+                let value: f64 = row
+                    .try_get("value")
+                    .map_err(|_| "missing 'value' column".to_string())?;
+                let color: Option<String> = row.try_get("color").ok();
+                Ok(ChartRow {
+                    label,
+                    value,
+                    color,
+                })
+            })
+            .collect()
     }
 
     async fn fetch_postgres(&self, pool: &sqlx::PgPool) -> Result<Vec<ChartRow>, String> {
@@ -113,11 +126,21 @@ impl ChartQueryChecker {
             .await
             .map_err(|e| e.to_string())?;
 
-        raw.iter().map(|row| {
-            let label: String = row.try_get("label").map_err(|_| "missing 'label' column".to_string())?;
-            let value: f64 = row.try_get("value").map_err(|_| "missing 'value' column".to_string())?;
-            let color: Option<String> = row.try_get("color").ok();
-            Ok(ChartRow { label, value, color })
-        }).collect()
+        raw.iter()
+            .map(|row| {
+                let label: String = row
+                    .try_get("label")
+                    .map_err(|_| "missing 'label' column".to_string())?;
+                let value: f64 = row
+                    .try_get("value")
+                    .map_err(|_| "missing 'value' column".to_string())?;
+                let color: Option<String> = row.try_get("color").ok();
+                Ok(ChartRow {
+                    label,
+                    value,
+                    color,
+                })
+            })
+            .collect()
     }
 }

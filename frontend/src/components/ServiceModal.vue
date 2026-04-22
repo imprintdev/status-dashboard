@@ -30,6 +30,7 @@ const SERVICE_TYPES = [
   { value: 'php_site',    label: 'PHP Site' },
   { value: 'preflight',   label: 'Preflight Script' },
   { value: 'sql_query',   label: 'SQL Query' },
+  { value: 'chart_query', label: 'Chart Query' },
 ]
 
 function defaultConfig(type: string): string {
@@ -42,7 +43,6 @@ function defaultConfig(type: string): string {
       degraded_ms: 2000,
     },
     database: {
-      driver: 'sqlite',
       connection_string: 'sqlite:./my.db',
       probe_query: 'SELECT 1',
       degraded_ms: 1000,
@@ -69,11 +69,17 @@ function defaultConfig(type: string): string {
       degraded_ms: 10000,
     },
     sql_query: {
-      driver: 'postgresql',
       connection_string: 'postgresql://user:pass@host/db',
       query: 'SELECT COUNT(*) FROM order_logs WHERE status > 400 AND date(created_at) = CURRENT_DATE',
       down_threshold: { gt: 1000 },
       degraded_threshold: { gt: 500 },
+      timeout_ms: 10000,
+    },
+    chart_query: {
+      connection_string: 'sqlite:./my.db',
+      query: 'SELECT status AS label, COUNT(*) AS value FROM requests GROUP BY status',
+      chart_type: 'pie',
+      title: 'Requests by Status',
       timeout_ms: 10000,
     },
   }
@@ -86,11 +92,12 @@ watch(serviceType, (t) => {
 
 const configHints: Record<string, string> = {
   http:        'url, method, expected_status, timeout_ms, degraded_ms, headers',
-  database:    'driver (sqlite), connection_string, probe_query, degraded_ms',
+  database:    'connection_string (sqlite: or postgresql://), probe_query, degraded_ms',
   aws_billing: 'region, access_key_id, secret_access_key, threshold_usd, degraded_pct',
   php_site:    'url, fpm_status_url?, expected_content?, timeout_ms, degraded_ms',
   preflight:   'command, args[], expected_exit_code, timeout_ms, degraded_ms',
-  sql_query:   'driver, connection_string, query, down_threshold { gt/lt/gte/lte/eq/neq }, degraded_threshold?, timeout_ms',
+  sql_query:   'connection_string (sqlite: or postgresql://), query, down_threshold { gt/lt/gte/lte/eq/neq }, degraded_threshold?, timeout_ms',
+  chart_query: 'connection_string (sqlite: or postgresql://), query (returns label+value rows), chart_type (pie/bar/line), title?, x_label?, y_label?, timeout_ms',
 }
 
 async function submit() {

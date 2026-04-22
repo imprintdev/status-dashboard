@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useServicesStore } from '../stores/services'
 import StatusBadge from './StatusBadge.vue'
 import type { System } from '../types'
+import { checkStats } from '../utils/serviceDetail'
 
 const props = defineProps<{ system: System }>()
 const emit  = defineEmits<{
@@ -14,7 +15,6 @@ const open = ref(true)
 const servicesStore = useServicesStore()
 const services = computed(() => servicesStore.bySystem(props.system.id))
 
-const fmtMs = (ms: number | null | undefined) => ms != null ? `${ms}ms` : '—'
 const fmtType = (t: string) => t.replace(/_/g, ' ')
 </script>
 
@@ -45,7 +45,13 @@ const fmtType = (t: string) => t.replace(/_/g, ' ')
         <span :class="['check-dot', svc.latest_check?.status ?? 'unknown']"></span>
         <span class="system-service-name">{{ svc.name }}</span>
         <span class="system-service-type">{{ fmtType(svc.service_type) }}</span>
-        <span class="system-service-ms">{{ fmtMs(svc.latest_check?.response_ms) }}</span>
+        <span class="system-service-stats">
+          <span
+            v-for="stat in checkStats(svc.service_type, svc.latest_check?.detail, svc.latest_check?.response_ms ?? null)"
+            :key="stat.label"
+            class="system-service-stat"
+          >{{ stat.label }}: {{ stat.value }}</span>
+        </span>
       </div>
     </div>
   </div>

@@ -190,6 +190,33 @@ body {
   flex-wrap: wrap;
 }
 
+.card-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 /* Status Badge */
 .status-badge {
   display: inline-flex;
@@ -425,7 +452,6 @@ input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-colo
 .check-dot.down     { background: var(--color-down); }
 
 .check-time { color: var(--text-muted); min-width: 130px; }
-.check-ms   { color: var(--text-muted); margin-left: auto; white-space: nowrap; }
 .check-err  {
   color: var(--color-down);
   font-size: 11px;
@@ -433,6 +459,35 @@ input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-colo
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
+}
+
+.check-stats {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.check-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.check-stat-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.check-stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
 /* Incident List */
@@ -555,7 +610,19 @@ input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-colo
 
 .system-service-name { flex: 1; font-weight: 500; }
 .system-service-type { font-size: 11px; color: var(--text-muted); }
-.system-service-ms   { font-size: 12px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+.system-service-stats {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  align-items: center;
+}
+
+.system-service-stat {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Ungrouped section */
 .section-header {

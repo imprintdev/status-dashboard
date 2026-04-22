@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::time::Instant;
 use crate::models::check_result::CheckStatus;
-use super::{CheckError, CheckOutput, Checker, ConfigError};
+use super::{CheckError, CheckOutput, Checker, ConfigError, infer_driver};
 
 pub struct DatabaseChecker {
-    driver: String,
+    driver: &'static str,
     connection_string: String,
     probe_query: String,
     degraded_ms: Option<u64>,
@@ -13,14 +13,11 @@ pub struct DatabaseChecker {
 
 impl DatabaseChecker {
     pub fn from_config(config: &Value) -> Result<Self, ConfigError> {
-        let driver = config["driver"]
-            .as_str()
-            .ok_or_else(|| ConfigError::InvalidConfig("database checker requires 'driver'".into()))?
-            .to_string();
         let connection_string = config["connection_string"]
             .as_str()
             .ok_or_else(|| ConfigError::InvalidConfig("database checker requires 'connection_string'".into()))?
             .to_string();
+        let driver = infer_driver(&connection_string)?;
         let probe_query = config["probe_query"]
             .as_str()
             .unwrap_or("SELECT 1")
@@ -53,7 +50,7 @@ impl Checker for DatabaseChecker {
                 Ok(CheckOutput {
                     status,
                     response_ms: Some(elapsed),
-                    detail: Some(serde_json::json!({ "driver": self.driver })),
+                    detail: None,
                     error_message: None,
                 })
             }
@@ -63,7 +60,7 @@ impl Checker for DatabaseChecker {
 
 impl DatabaseChecker {
     async fn run_probe(&self) -> Result<(), String> {
-        match self.driver.as_str() {
+        match self.driver {
             "sqlite" => {
                 let pool = sqlx::SqlitePool::connect(&self.connection_string)
                     .await
@@ -75,7 +72,7 @@ impl DatabaseChecker {
                 pool.close().await;
                 Ok(())
             }
-            "postgresql" | "postgres" => {
+            _ => {
                 let pool = sqlx::PgPool::connect(&self.connection_string)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -86,7 +83,6 @@ impl DatabaseChecker {
                 pool.close().await;
                 Ok(())
             }
-            other => Err(format!("Unsupported database driver: {other}")),
         }
     }
 }

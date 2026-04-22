@@ -26,10 +26,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Db(_) | AppError::Internal(_) => {
                 tracing::error!("{}", self);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
-                )
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
         };
         (status, Json(json!({ "error": message }))).into_response()

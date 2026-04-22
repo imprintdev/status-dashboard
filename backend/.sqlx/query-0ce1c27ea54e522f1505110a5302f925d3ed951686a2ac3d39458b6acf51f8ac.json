@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!\", checked_at as \"checked_at!\", status as \"status!\",\n               response_ms, error_message\n               FROM check_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT 1",
+  "query": "SELECT id as \"id!\", checked_at as \"checked_at!\", status as \"status!\",\n               response_ms, error_message, detail\n               FROM check_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "name": "error_message",
         "ordinal": 4,
         "type_info": "Text"
+      },
+      {
+        "name": "detail",
+        "ordinal": 5,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -37,8 +42,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "58b6e2c3ca961636bdfac46b69c0c03326027d9769a9f11cfc719f7c19005319"
+  "hash": "0ce1c27ea54e522f1505110a5302f925d3ed951686a2ac3d39458b6acf51f8ac"
 }

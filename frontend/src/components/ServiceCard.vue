@@ -2,6 +2,7 @@
 import StatusBadge from './StatusBadge.vue'
 import ChartWidget from './ChartWidget.vue'
 import type { Service } from '../types'
+import { serviceStats } from '../utils/serviceDetail'
 
 const props = defineProps<{ service: Service }>()
 const emit  = defineEmits<{ select: [id: string] }>()
@@ -16,9 +17,7 @@ const statusClass = () => {
   return ''
 }
 
-const fmtMs = (ms: number | null | undefined) =>
-  ms != null ? `${ms}ms` : '—'
-
+const fmtMs = (ms: number | null | undefined) => ms != null ? `${ms}ms` : '—'
 const fmtType = (t: string) => t.replace(/_/g, ' ')
 </script>
 
@@ -46,9 +45,14 @@ const fmtType = (t: string) => t.replace(/_/g, ' ')
     <div style="margin-bottom: 10px">
       <StatusBadge :status="service.latest_check?.status ?? null" />
     </div>
-    <div class="card-meta">
-      <span>⏱ {{ fmtMs(service.latest_check?.response_ms) }}</span>
-      <span v-if="!service.enabled" style="color: var(--color-degraded)">Disabled</span>
+    <div v-if="serviceStats(service).length > 0" class="card-stats">
+      <span v-for="stat in serviceStats(service)" :key="stat.label" class="stat-item">
+        <span class="stat-label">{{ stat.label }}</span>
+        <span class="stat-value">{{ stat.value }}</span>
+      </span>
+    </div>
+    <div v-if="!service.enabled" class="card-meta">
+      <span style="color: var(--color-degraded)">Disabled</span>
     </div>
   </div>
 </template>
