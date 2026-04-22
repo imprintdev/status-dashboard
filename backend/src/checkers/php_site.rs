@@ -86,9 +86,7 @@ impl Checker for PhpSiteChecker {
             }
         }
 
-        let status = if !fpm_ok {
-            CheckStatus::Degraded
-        } else if self.degraded_ms.map(|d| elapsed > d).unwrap_or(false) {
+        let status = if !fpm_ok || self.degraded_ms.map(|d| elapsed > d).unwrap_or(false) {
             CheckStatus::Degraded
         } else {
             CheckStatus::Up

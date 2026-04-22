@@ -36,12 +36,12 @@ impl Threshold {
     }
 
     fn matches(&self, n: f64) -> bool {
-        if let Some(v) = self.gt  { if !(n >  v) { return false; } }
-        if let Some(v) = self.lt  { if !(n <  v) { return false; } }
-        if let Some(v) = self.gte { if !(n >= v) { return false; } }
-        if let Some(v) = self.lte { if !(n <= v) { return false; } }
-        if let Some(v) = self.eq  { if n != v    { return false; } }
-        if let Some(v) = self.neq { if n == v    { return false; } }
+        if let Some(v) = self.gt  { if n <= v { return false; } }
+        if let Some(v) = self.lt  { if n >= v { return false; } }
+        if let Some(v) = self.gte { if n <  v { return false; } }
+        if let Some(v) = self.lte { if n >  v { return false; } }
+        if let Some(v) = self.eq  { if n != v { return false; } }
+        if let Some(v) = self.neq { if n == v { return false; } }
         true
     }
 }
