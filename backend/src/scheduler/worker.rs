@@ -13,7 +13,12 @@ pub async fn run_service_loop(
     db: SqlitePool,
     tx: broadcast::Sender<WsMessage>,
 ) {
+    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
+        ticker.tick().await;
+
         let row = sqlx::query!(
             r#"SELECT id as "id!", service_type as "service_type!", config as "config!",
                interval_secs as "interval_secs!", enabled as "enabled!"
@@ -25,15 +30,8 @@ pub async fn run_service_loop(
 
         let row = match row {
             Ok(Some(r)) => r,
-            Ok(None) => {
-                tracing::warn!("Service {} not found, stopping worker", service_id);
-                break;
-            }
-            Err(e) => {
-                tracing::error!("DB error fetching service {}: {}", service_id, e);
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                continue;
-            }
+            Ok(None) => { tracing::warn!("Service {} not found, stopping worker", service_id); break; }
+            Err(e)    => { tracing::error!("DB error fetching service {}: {}", service_id, e); continue; }
         };
 
         if row.enabled == 0 {
@@ -42,32 +40,25 @@ pub async fn run_service_loop(
         }
 
         let interval = std::time::Duration::from_secs(row.interval_secs as u64);
+        if ticker.period() != interval {
+            ticker = tokio::time::interval(interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ticker.tick().await; // consume the immediate first tick
+        }
 
         let config: serde_json::Value = match serde_json::from_str(&row.config) {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!("Invalid config JSON for service {}: {}", service_id, e);
-                tokio::time::sleep(interval).await;
-                continue;
-            }
+            Ok(v)  => v,
+            Err(e) => { tracing::error!("Invalid config JSON for service {}: {}", service_id, e); continue; }
         };
 
         let checker = match build_checker(&row.service_type, &config) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("Cannot build checker for service {}: {}", service_id, e);
-                tokio::time::sleep(interval).await;
-                continue;
-            }
+            Ok(c)  => c,
+            Err(e) => { tracing::error!("Cannot build checker for service {}: {}", service_id, e); continue; }
         };
 
         let output = match checker.check().await {
-            Ok(o) => o,
-            Err(e) => {
-                tracing::error!("Checker error for service {}: {}", service_id, e);
-                tokio::time::sleep(interval).await;
-                continue;
-            }
+            Ok(o)  => o,
+            Err(e) => { tracing::error!("Checker error for service {}: {}", service_id, e); continue; }
         };
 
         let check_id = Uuid::new_v4().to_string();
@@ -79,13 +70,7 @@ pub async fn run_service_loop(
         if let Err(e) = sqlx::query!(
             "INSERT INTO check_results (id, service_id, checked_at, status, response_ms, detail, error_message)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
-            check_id,
-            service_id,
-            checked_at,
-            status_str,
-            response_ms,
-            detail_str,
-            output.error_message
+            check_id, service_id, checked_at, status_str, response_ms, detail_str, output.error_message
         )
         .execute(&db)
         .await
@@ -104,8 +89,6 @@ pub async fn run_service_loop(
             detail: output.detail,
             error_message: output.error_message,
         });
-
-        tokio::time::sleep(interval).await;
     }
 }
 

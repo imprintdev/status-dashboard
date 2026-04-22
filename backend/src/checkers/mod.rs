@@ -8,6 +8,7 @@ pub mod database;
 pub mod http;
 pub mod php_site;
 pub mod preflight;
+pub mod sql_query;
 
 #[derive(Debug, Clone)]
 pub struct CheckOutput {
@@ -46,6 +47,7 @@ pub fn build_checker(
         "aws_billing" => Ok(Box::new(aws_billing::AwsBillingChecker::from_config(config)?)),
         "php_site" => Ok(Box::new(php_site::PhpSiteChecker::from_config(config)?)),
         "preflight" => Ok(Box::new(preflight::PreflightChecker::from_config(config)?)),
+        "sql_query" => Ok(Box::new(sql_query::SqlQueryChecker::from_config(config)?)),
         other => Err(ConfigError::UnknownType(other.to_string())),
     }
 }

@@ -29,6 +29,7 @@ const SERVICE_TYPES = [
   { value: 'aws_billing', label: 'AWS Billing' },
   { value: 'php_site',    label: 'PHP Site' },
   { value: 'preflight',   label: 'Preflight Script' },
+  { value: 'sql_query',   label: 'SQL Query' },
 ]
 
 function defaultConfig(type: string): string {
@@ -67,6 +68,14 @@ function defaultConfig(type: string): string {
       timeout_ms: 30000,
       degraded_ms: 10000,
     },
+    sql_query: {
+      driver: 'postgresql',
+      connection_string: 'postgresql://user:pass@host/db',
+      query: 'SELECT COUNT(*) FROM order_logs WHERE status > 400 AND date(created_at) = CURRENT_DATE',
+      down_threshold: { gt: 1000 },
+      degraded_threshold: { gt: 500 },
+      timeout_ms: 10000,
+    },
   }
   return JSON.stringify(configs[type] ?? {}, null, 2)
 }
@@ -81,6 +90,7 @@ const configHints: Record<string, string> = {
   aws_billing: 'region, access_key_id, secret_access_key, threshold_usd, degraded_pct',
   php_site:    'url, fpm_status_url?, expected_content?, timeout_ms, degraded_ms',
   preflight:   'command, args[], expected_exit_code, timeout_ms, degraded_ms',
+  sql_query:   'driver, connection_string, query, down_threshold { gt/lt/gte/lte/eq/neq }, degraded_threshold?, timeout_ms',
 }
 
 async function submit() {
