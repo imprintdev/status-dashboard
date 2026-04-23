@@ -120,6 +120,7 @@ function statusClass(service: Service): string {
 }
 
 .tv-slice-watermark {
+  display: none;
   position: absolute;
   inset: 0;
   display: flex;
