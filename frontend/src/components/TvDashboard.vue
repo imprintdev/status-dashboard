@@ -2,11 +2,13 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useServicesStore } from '../stores/services'
 import { useSystemsStore } from '../stores/systems'
+import { useWebSocket } from '../composables/useWebSocket'
 import TvSystemColumn from './TvSystemColumn.vue'
 import TvServiceSlice from './TvServiceSlice.vue'
 
 const servicesStore = useServicesStore()
 const systemsStore  = useSystemsStore()
+const { status: wsStatus } = useWebSocket()
 
 const systems   = computed(() => systemsStore.list)
 const ungrouped = computed(() => servicesStore.ungrouped)
@@ -72,6 +74,10 @@ const timeStr = computed(() =>
 
     <div class="tv-footer">
       <span class="tv-footer-title">Status Dashboard</span>
+      <span class="tv-footer-ws">
+        <span :class="['tv-ws-dot', wsStatus]"></span>
+        <span class="tv-ws-label">{{ { connecting: 'Connecting', open: 'Live', closed: 'Disconnected', error: 'Error' }[wsStatus] }}</span>
+      </span>
       <span class="tv-footer-time">{{ timeStr }}</span>
     </div>
   </div>
@@ -150,6 +156,31 @@ const timeStr = computed(() =>
   font-weight: 700;
   color: #555;
   letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.tv-footer-ws {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tv-ws-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tv-ws-dot.open       { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+.tv-ws-dot.connecting { background: #eab308; }
+.tv-ws-dot.closed     { background: #6b7280; }
+.tv-ws-dot.error      { background: #ef4444; }
+
+.tv-ws-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
