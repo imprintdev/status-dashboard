@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde_json::Value;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use crate::models::check_result::CheckStatus;
 use super::{CheckError, CheckOutput, Checker, ConfigError, infer_driver};
 
@@ -9,6 +9,7 @@ pub struct DatabaseChecker {
     connection_string: String,
     probe_query: String,
     degraded_ms: Option<u64>,
+    timeout_ms: u64,
 }
 
 impl DatabaseChecker {
@@ -23,7 +24,8 @@ impl DatabaseChecker {
             .unwrap_or("SELECT 1")
             .to_string();
         let degraded_ms = config["degraded_ms"].as_u64();
-        Ok(Self { driver, connection_string, probe_query, degraded_ms })
+        let timeout_ms = config["timeout_ms"].as_u64().unwrap_or(10_000);
+        Ok(Self { driver, connection_string, probe_query, degraded_ms, timeout_ms })
     }
 }
 
@@ -31,7 +33,12 @@ impl DatabaseChecker {
 impl Checker for DatabaseChecker {
     async fn check(&self) -> Result<CheckOutput, CheckError> {
         let start = Instant::now();
-        let result = self.run_probe().await;
+        let result = tokio::time::timeout(
+            Duration::from_millis(self.timeout_ms),
+            self.run_probe(),
+        )
+        .await
+        .unwrap_or_else(|_| Err("connection timed out".to_string()));
         let elapsed = start.elapsed().as_millis() as u64;
 
         match result {
@@ -60,27 +67,26 @@ impl Checker for DatabaseChecker {
 
 impl DatabaseChecker {
     async fn run_probe(&self) -> Result<(), String> {
+        use sqlx::Connection;
         match self.driver {
             "sqlite" => {
-                let pool = sqlx::SqlitePool::connect(&self.connection_string)
+                let mut conn = sqlx::SqliteConnection::connect(&self.connection_string)
                     .await
                     .map_err(|e| e.to_string())?;
                 sqlx::query(&self.probe_query)
-                    .execute(&pool)
+                    .execute(&mut conn)
                     .await
                     .map_err(|e| e.to_string())?;
-                pool.close().await;
                 Ok(())
             }
             _ => {
-                let pool = sqlx::PgPool::connect(&self.connection_string)
+                let mut conn = sqlx::PgConnection::connect(&self.connection_string)
                     .await
                     .map_err(|e| e.to_string())?;
                 sqlx::query(&self.probe_query)
-                    .execute(&pool)
+                    .execute(&mut conn)
                     .await
                     .map_err(|e| e.to_string())?;
-                pool.close().await;
                 Ok(())
             }
         }

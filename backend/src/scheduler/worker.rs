@@ -56,9 +56,11 @@ pub async fn run_service_loop(
             Err(e) => { tracing::error!("Cannot build checker for service {}: {}", service_id, e); continue; }
         };
 
-        let output = match checker.check().await {
-            Ok(o)  => o,
-            Err(e) => { tracing::error!("Checker error for service {}: {}", service_id, e); continue; }
+        let check_timeout = std::time::Duration::from_secs(row.interval_secs.max(30) as u64);
+        let output = match tokio::time::timeout(check_timeout, checker.check()).await {
+            Ok(Ok(o))  => o,
+            Ok(Err(e)) => { tracing::error!("Checker error for service {}: {}", service_id, e); continue; }
+            Err(_)     => { tracing::error!("Checker timed out for service {}", service_id); continue; }
         };
 
         let check_id = Uuid::new_v4().to_string();
