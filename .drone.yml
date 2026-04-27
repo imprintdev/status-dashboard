@@ -1,0 +1,78 @@
+kind: pipeline
+type: docker
+name: status-dashboard
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+  - name: build
+    image: rust:1.95.0-trixie
+    environment:
+      CARGO_NET_GIT_FETCH_WITH_CLI: true
+      GIT_SSH_KEY:
+        from_secret: deploy_ssh_key
+    commands:
+      - cd backend && cargo build --release --locked
+      - mv target/release/status-dashboard /drone/src/status-dashboard
+      - rm -rf target
+      
+      - cd ..
+
+      - cd frontend 
+      - npm i && npm build 
+      - mv dist /drone/src/status-dashboard/dist
+      - rm -rf node_modules
+
+  - name: container
+    image: plugins/ecr
+    settings:
+      repo: status-dashboard
+      registry: 347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard
+      region: eu-west-2
+      dockerfile: Dockerfile
+      context: .
+      access_key:
+        from_secret: aws_access_key
+      secret_key:
+        from_secret: aws_secret_access_key
+      tags:
+        - "${DRONE_COMMIT_SHA:0:8}"
+        - "latest"
+    depends_on:
+      - build
+    when:
+      branch:
+        - main
+
+  - name: deploy
+    image: drone/git
+    environment:
+      DEPLOY_SSH_KEY:
+        from_secret: deploy_ssh_key
+    commands:
+      - mkdir -p ~/.ssh
+      - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+      - echo -n "$DEPLOY_SSH_KEY" > ~/.ssh/id_rsa
+      - chmod 600 ~/.ssh/*
+      - git clone git@github.com:imprintdev/kubernetes-config.git
+      - wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
+      - chmod +x yq_linux_amd64
+      - mv yq_linux_amd64 /usr/bin/yq
+
+      - cd kubernetes-config/status-dashboard
+      - yq -i '.spec.template.spec.containers[0].image = "347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard:${DRONE_COMMIT_SHA:0:8}"' deployment.yaml
+
+      # commit
+      - git add .
+      - git commit --author="Drone CI Pipeline <noreply@drone>" -m "pipeline deploy status-dashboard ${DRONE_COMMIT_SHA:0:8}"
+      - git push
+    depends_on:
+      - container
+    when:
+      event:
+        - push
+        - custom
+      branch:
+        - main

@@ -21,15 +21,32 @@ fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
     loop {
         let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
         let dy = if leap { 366 } else { 365 };
-        if days < dy { break; }
+        if days < dy {
+            break;
+        }
         days -= dy;
         y += 1;
     }
     let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-    let months = [31u64, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31u64,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut mo = 1u64;
     for dm in &months {
-        if days < *dm { break; }
+        if days < *dm {
+            break;
+        }
         days -= dm;
         mo += 1;
     }
@@ -38,8 +55,8 @@ fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
 
 #[cfg(target_os = "windows")]
 fn disk_free_gb() -> f64 {
-    use std::os::windows::ffi::OsStrExt;
     use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
 
     #[allow(non_camel_case_types)]
     type BOOL = i32;
@@ -84,7 +101,12 @@ fn disk_free_gb() -> f64 {
     }
 
     let mut st = Statvfs {
-        f_bsize: 0, f_frsize: 0, f_blocks: 0, f_bfree: 0, f_bavail: 0, _pad: [0; 80],
+        f_bsize: 0,
+        f_frsize: 0,
+        f_blocks: 0,
+        f_bfree: 0,
+        f_bavail: 0,
+        _pad: [0; 80],
     };
     unsafe {
         statvfs(b"/\0".as_ptr(), &mut st);
@@ -120,9 +142,7 @@ fn main() {
     let addr = "0.0.0.0:9000";
     let listener = TcpListener::bind(addr).expect("failed to bind");
     eprintln!("listening on http://{}", addr);
-    for stream in listener.incoming() {
-        if let Ok(s) = stream {
-            handle(s);
-        }
+    for s in listener.incoming().flatten() {
+        handle(s);
     }
 }
