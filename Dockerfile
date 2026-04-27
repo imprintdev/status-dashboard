@@ -6,4 +6,4 @@ WORKDIR /app
 COPY status-dashboard .
 COPY dist/* /usr/share/nginx/html
 
-ENTRYPOINT [ "/app/status-dashboard-backend" ]
+ENTRYPOINT [ "/app/status-dashboard" ]
