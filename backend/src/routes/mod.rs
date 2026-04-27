@@ -40,7 +40,7 @@ pub fn router(state: AppState) -> Router {
                 .route("/services/{id}/uptime", get(services::get_uptime))
                 .route("/services/{id}/incidents", get(incidents::list_incidents))
                 .route(
-                    "/services/:service_id/incidents/:incident_id",
+                    "/services/{service_id}/incidents/{incident_id}",
                     patch(incidents::resolve_incident),
                 ),
         )
