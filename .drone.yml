@@ -33,7 +33,7 @@ steps:
     image: plugins/ecr
     settings:
       repo: status-dashboard
-      registry: 347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard
+      registry: 347260228192.dkr.ecr.eu-west-2.amazonaws.com
       region: eu-west-2
       dockerfile: Dockerfile
       context: .
