@@ -19,7 +19,7 @@ fn iso8601() -> String {
 fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
     let mut y = 1970u64;
     loop {
-        let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+        let leap = y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400));
         let dy = if leap { 366 } else { 365 };
         if days < dy {
             break;
@@ -27,7 +27,7 @@ fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
         days -= dy;
         y += 1;
     }
-    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let leap = y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400));
     let months = [
         31u64,
         if leap { 29 } else { 28 },
@@ -109,6 +109,7 @@ fn disk_free_gb() -> f64 {
         _pad: [0; 80],
     };
     unsafe {
+        #[allow(clippy::manual_c_str_literals)]
         statvfs(b"/\0".as_ptr(), &mut st);
     }
     (st.f_bavail * st.f_frsize) as f64 / 1_073_741_824.0
