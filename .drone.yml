@@ -27,7 +27,7 @@ steps:
     commands:
       - cd frontend 
       - npm i && npm run build 
-      - mv dist /drone/src/status-dashboard/dist
+      - mv dist /drone/src/status-dashboard/
       - rm -rf node_modules
 
   - name: container
