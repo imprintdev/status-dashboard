@@ -26,7 +26,7 @@ steps:
         from_secret: deploy_ssh_key
     commands:
       - cd frontend 
-      - npm i && npm build 
+      - npm i && npm run build 
       - mv dist /drone/src/status-dashboard/dist
       - rm -rf node_modules
 
