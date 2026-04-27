@@ -39,18 +39,6 @@ pub enum ConfigError {
     InvalidConfig(String),
 }
 
-pub fn infer_driver(connection_string: &str) -> Result<&'static str, ConfigError> {
-    if connection_string.starts_with("sqlite:") {
-        Ok("sqlite")
-    } else if connection_string.starts_with("postgresql://") || connection_string.starts_with("postgres://") {
-        Ok("postgresql")
-    } else {
-        Err(ConfigError::InvalidConfig(
-            format!("cannot infer driver from connection_string '{connection_string}' — expected 'sqlite:' or 'postgresql://'")
-        ))
-    }
-}
-
 pub fn build_checker(
     service_type: &str,
     config: &Value,

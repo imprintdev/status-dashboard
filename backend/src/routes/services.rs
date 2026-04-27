@@ -7,7 +7,10 @@ use chrono::Utc;
 use uuid::Uuid;
 use crate::{
     error::AppError,
-    models::service::{CreateService, UpdateService},
+    models::{
+        check_result::CheckResult,
+        service::{CreateService, Service, UpdateService},
+    },
     scheduler,
     state::AppState,
     ws::messages::WsMessage,
@@ -16,31 +19,28 @@ use crate::{
 pub async fn list_services(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
-    let rows = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", service_type as "service_type!",
-           config as "config!", interval_secs as "interval_secs!", enabled as "enabled!",
-           created_at as "created_at!", updated_at as "updated_at!"
-           FROM services ORDER BY created_at ASC"#
+    let rows = sqlx::query_as::<_, Service>(
+        "SELECT id, name, service_type, config, interval_secs, enabled, created_at, updated_at
+         FROM services ORDER BY created_at ASC",
     )
     .fetch_all(&state.db)
     .await?;
 
     let mut result = Vec::with_capacity(rows.len());
     for r in rows {
-        let system_ids: Vec<String> = sqlx::query_scalar!(
-            "SELECT system_id FROM service_systems WHERE service_id = ?",
-            r.id
+        let system_ids: Vec<String> = sqlx::query_scalar::<_, String>(
+            "SELECT system_id FROM service_systems WHERE service_id = $1",
         )
+        .bind(&r.id)
         .fetch_all(&state.db)
         .await
         .unwrap_or_default();
 
-        let latest = sqlx::query!(
-            r#"SELECT id as "id!", checked_at as "checked_at!", status as "status!",
-               response_ms, error_message, detail
-               FROM check_results WHERE service_id = ? ORDER BY checked_at DESC LIMIT 1"#,
-            r.id
+        let latest = sqlx::query_as::<_, CheckResult>(
+            "SELECT id, service_id, checked_at, status, response_ms, detail, error_message
+             FROM check_results WHERE service_id = $1 ORDER BY checked_at DESC LIMIT 1",
         )
+        .bind(&r.id)
         .fetch_optional(&state.db)
         .await?;
 
@@ -78,21 +78,19 @@ pub async fn get_service(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let r = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", service_type as "service_type!",
-           config as "config!", interval_secs as "interval_secs!", enabled as "enabled!",
-           created_at as "created_at!", updated_at as "updated_at!"
-           FROM services WHERE id = ?"#,
-        id
+    let r = sqlx::query_as::<_, Service>(
+        "SELECT id, name, service_type, config, interval_secs, enabled, created_at, updated_at
+         FROM services WHERE id = $1",
     )
+    .bind(&id)
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
 
-    let system_ids: Vec<String> = sqlx::query_scalar!(
-        "SELECT system_id FROM service_systems WHERE service_id = ?",
-        r.id
+    let system_ids: Vec<String> = sqlx::query_scalar::<_, String>(
+        "SELECT system_id FROM service_systems WHERE service_id = $1",
     )
+    .bind(&r.id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -122,20 +120,27 @@ pub async fn create_service(
     crate::checkers::build_checker(&body.service_type, &body.config)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    sqlx::query!(
+    sqlx::query(
         "INSERT INTO services (id, name, service_type, config, interval_secs, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-        id, body.name, body.service_type, config_str, interval, now, now
+         VALUES ($1, $2, $3, $4, $5, 1, $6, $7)",
     )
+    .bind(&id)
+    .bind(&body.name)
+    .bind(&body.service_type)
+    .bind(&config_str)
+    .bind(interval)
+    .bind(&now)
+    .bind(&now)
     .execute(&state.db)
     .await?;
 
     if let Some(system_ids) = &body.system_ids {
         for sid in system_ids {
-            sqlx::query!(
-                "INSERT OR IGNORE INTO service_systems (service_id, system_id) VALUES (?, ?)",
-                id, sid
+            sqlx::query(
+                "INSERT INTO service_systems (service_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
             )
+            .bind(&id)
+            .bind(sid)
             .execute(&state.db)
             .await?;
         }
@@ -153,12 +158,11 @@ pub async fn update_service(
     Path(id): Path<String>,
     Json(body): Json<UpdateService>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let r = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", config as "config!",
-           interval_secs as "interval_secs!", enabled as "enabled!"
-           FROM services WHERE id = ?"#,
-        id
+    let r = sqlx::query_as::<_, Service>(
+        "SELECT id, name, service_type, config, interval_secs, enabled, created_at, updated_at
+         FROM services WHERE id = $1",
     )
+    .bind(&id)
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
@@ -169,22 +173,29 @@ pub async fn update_service(
     let enabled: i64 = body.enabled.map(|e| e as i64).unwrap_or(r.enabled);
     let now = Utc::now().to_rfc3339();
 
-    sqlx::query!(
-        "UPDATE services SET name = ?, config = ?, interval_secs = ?, enabled = ?, updated_at = ? WHERE id = ?",
-        name, config_str, interval, enabled, now, id
+    sqlx::query(
+        "UPDATE services SET name = $1, config = $2, interval_secs = $3, enabled = $4, updated_at = $5 WHERE id = $6",
     )
+    .bind(&name)
+    .bind(&config_str)
+    .bind(interval)
+    .bind(enabled)
+    .bind(&now)
+    .bind(&id)
     .execute(&state.db)
     .await?;
 
     if let Some(system_ids) = &body.system_ids {
-        sqlx::query!("DELETE FROM service_systems WHERE service_id = ?", id)
+        sqlx::query("DELETE FROM service_systems WHERE service_id = $1")
+            .bind(&id)
             .execute(&state.db)
             .await?;
         for sid in system_ids {
-            sqlx::query!(
-                "INSERT OR IGNORE INTO service_systems (service_id, system_id) VALUES (?, ?)",
-                id, sid
+            sqlx::query(
+                "INSERT INTO service_systems (service_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
             )
+            .bind(&id)
+            .bind(sid)
             .execute(&state.db)
             .await?;
         }
@@ -196,10 +207,10 @@ pub async fn update_service(
         scheduler::abort_service(&id, &state.scheduler_handles).await;
     }
 
-    let effective_system_ids: Vec<String> = sqlx::query_scalar!(
-        "SELECT system_id FROM service_systems WHERE service_id = ?",
-        id
+    let effective_system_ids: Vec<String> = sqlx::query_scalar::<_, String>(
+        "SELECT system_id FROM service_systems WHERE service_id = $1",
     )
+    .bind(&id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -221,7 +232,8 @@ pub async fn delete_service(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    let rows = sqlx::query!("DELETE FROM services WHERE id = ?", id)
+    let rows = sqlx::query("DELETE FROM services WHERE id = $1")
+        .bind(&id)
         .execute(&state.db)
         .await?
         .rows_affected();
@@ -248,17 +260,19 @@ pub async fn get_uptime(
     };
     let since = (Utc::now() - chrono::Duration::days(days)).to_rfc3339();
 
-    let total: i64 = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM check_results WHERE service_id = ? AND checked_at >= ?",
-        id, since
+    let total: i64 = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM check_results WHERE service_id = $1 AND checked_at >= $2",
     )
+    .bind(&id)
+    .bind(&since)
     .fetch_one(&state.db)
     .await?;
 
-    let up: i64 = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM check_results WHERE service_id = ? AND checked_at >= ? AND status = 'up'",
-        id, since
+    let up: i64 = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM check_results WHERE service_id = $1 AND checked_at >= $2 AND status = 'up'",
     )
+    .bind(&id)
+    .bind(&since)
     .fetch_one(&state.db)
     .await?;
 

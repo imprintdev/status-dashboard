@@ -14,28 +14,14 @@ pub async fn list_incidents(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
 ) -> Result<Json<Vec<Incident>>, AppError> {
-    let rows = sqlx::query!(
-        r#"SELECT id as "id!", service_id as "service_id!", started_at as "started_at!",
-           resolved_at, status as "status!", trigger_status as "trigger_status!", notes
-           FROM incidents WHERE service_id = ?
-           ORDER BY started_at DESC LIMIT 100"#,
-        service_id
+    let incidents = sqlx::query_as::<_, Incident>(
+        "SELECT id, service_id, started_at, resolved_at, status, trigger_status, notes
+         FROM incidents WHERE service_id = $1
+         ORDER BY started_at DESC LIMIT 100",
     )
+    .bind(&service_id)
     .fetch_all(&state.db)
     .await?;
-
-    let incidents = rows
-        .into_iter()
-        .map(|r| Incident {
-            id: r.id,
-            service_id: r.service_id,
-            started_at: r.started_at,
-            resolved_at: r.resolved_at,
-            status: r.status,
-            trigger_status: r.trigger_status,
-            notes: r.notes,
-        })
-        .collect();
 
     Ok(Json(incidents))
 }
@@ -47,11 +33,14 @@ pub async fn resolve_incident(
 ) -> Result<Json<Incident>, AppError> {
     let now = Utc::now().to_rfc3339();
 
-    let rows = sqlx::query!(
-        "UPDATE incidents SET resolved_at = ?, status = 'resolved', notes = ?
-         WHERE id = ? AND service_id = ? AND status = 'open'",
-        now, body.notes, incident_id, service_id
+    let rows = sqlx::query(
+        "UPDATE incidents SET resolved_at = $1, status = 'resolved', notes = $2
+         WHERE id = $3 AND service_id = $4 AND status = 'open'",
     )
+    .bind(&now)
+    .bind(&body.notes)
+    .bind(&incident_id)
+    .bind(&service_id)
     .execute(&state.db)
     .await?
     .rows_affected();
@@ -60,24 +49,13 @@ pub async fn resolve_incident(
         return Err(AppError::NotFound);
     }
 
-    let r = sqlx::query!(
-        r#"SELECT id as "id!", service_id as "service_id!", started_at as "started_at!",
-           resolved_at, status as "status!", trigger_status as "trigger_status!", notes
-           FROM incidents WHERE id = ?"#,
-        incident_id
+    let incident = sqlx::query_as::<_, Incident>(
+        "SELECT id, service_id, started_at, resolved_at, status, trigger_status, notes
+         FROM incidents WHERE id = $1",
     )
+    .bind(&incident_id)
     .fetch_one(&state.db)
     .await?;
-
-    let incident = Incident {
-        id: r.id,
-        service_id: r.service_id,
-        started_at: r.started_at,
-        resolved_at: r.resolved_at,
-        status: r.status,
-        trigger_status: r.trigger_status,
-        notes: r.notes,
-    };
 
     let _ = state.tx.send(WsMessage::IncidentResolved {
         incident_id: incident.id.clone(),

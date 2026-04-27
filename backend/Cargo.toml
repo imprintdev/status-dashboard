@@ -1,22 +1,22 @@
 [package]
 name = "status-dashboard"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8.9", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors"] }
-sqlx = { version = "0.8", features = ["sqlite", "postgres", "runtime-tokio", "macros", "uuid", "chrono"] }
+tower = "0.5.3"
+tower-http = { version = "0.6.8", features = ["cors"] }
+sqlx = { version = "0.8", features = [ "postgres", "runtime-tokio", "macros", "uuid", "chrono"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13.3", features = ["json"] }
 dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-thiserror = "1"
+thiserror = "2.0.18"
 futures-util = "0.3"

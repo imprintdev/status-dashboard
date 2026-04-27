@@ -13,36 +13,35 @@ pub async fn list_checks(
     let limit: i64 = params.get("limit").and_then(|v| v.parse().ok()).unwrap_or(50);
 
     let results = if let Some(before_id) = params.get("before_id") {
-        let before_at = sqlx::query_scalar!(
-            r#"SELECT checked_at as "checked_at!" FROM check_results WHERE id = ?"#,
-            before_id
+        let before_at = sqlx::query_scalar::<_, String>(
+            "SELECT checked_at FROM check_results WHERE id = $1",
         )
+        .bind(before_id)
         .fetch_optional(&state.db)
         .await?;
 
         if let Some(at) = before_at {
-            sqlx::query_as!(
-                CheckResult,
-                r#"SELECT id as "id!", service_id as "service_id!", checked_at as "checked_at!",
-                   status as "status!", response_ms, detail, error_message
-                   FROM check_results WHERE service_id = ? AND checked_at < ?
-                   ORDER BY checked_at DESC LIMIT ?"#,
-                service_id, at, limit
+            sqlx::query_as::<_, CheckResult>(
+                "SELECT id, service_id, checked_at, status, response_ms, detail, error_message
+                 FROM check_results WHERE service_id = $1 AND checked_at < $2
+                 ORDER BY checked_at DESC LIMIT $3",
             )
+            .bind(&service_id)
+            .bind(&at)
+            .bind(limit)
             .fetch_all(&state.db)
             .await?
         } else {
             vec![]
         }
     } else {
-        sqlx::query_as!(
-            CheckResult,
-            r#"SELECT id as "id!", service_id as "service_id!", checked_at as "checked_at!",
-               status as "status!", response_ms, detail, error_message
-               FROM check_results WHERE service_id = ?
-               ORDER BY checked_at DESC LIMIT ?"#,
-            service_id, limit
+        sqlx::query_as::<_, CheckResult>(
+            "SELECT id, service_id, checked_at, status, response_ms, detail, error_message
+             FROM check_results WHERE service_id = $1
+             ORDER BY checked_at DESC LIMIT $2",
         )
+        .bind(&service_id)
+        .bind(limit)
         .fetch_all(&state.db)
         .await?
     };

@@ -6,7 +6,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Self {
         let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite:./status_dashboard.db".to_string());
+            .unwrap_or_else(|_| "postgresql://localhost/status_dashboard".to_string());
         let port = std::env::var("PORT")
             .ok()
             .and_then(|v| v.parse().ok())

@@ -1,11 +1,10 @@
+use super::{CheckError, CheckOutput, Checker, ConfigError};
+use crate::models::check_result::CheckStatus;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use crate::models::check_result::CheckStatus;
-use super::{CheckError, CheckOutput, Checker, ConfigError, infer_driver};
 
 pub struct DatabaseChecker {
-    driver: &'static str,
     connection_string: String,
     probe_query: String,
     degraded_ms: Option<u64>,
@@ -16,16 +15,22 @@ impl DatabaseChecker {
     pub fn from_config(config: &Value) -> Result<Self, ConfigError> {
         let connection_string = config["connection_string"]
             .as_str()
-            .ok_or_else(|| ConfigError::InvalidConfig("database checker requires 'connection_string'".into()))?
+            .ok_or_else(|| {
+                ConfigError::InvalidConfig("database checker requires 'connection_string'".into())
+            })?
             .to_string();
-        let driver = infer_driver(&connection_string)?;
         let probe_query = config["probe_query"]
             .as_str()
             .unwrap_or("SELECT 1")
             .to_string();
         let degraded_ms = config["degraded_ms"].as_u64();
         let timeout_ms = config["timeout_ms"].as_u64().unwrap_or(10_000);
-        Ok(Self { driver, connection_string, probe_query, degraded_ms, timeout_ms })
+        Ok(Self {
+            connection_string,
+            probe_query,
+            degraded_ms,
+            timeout_ms,
+        })
     }
 }
 
@@ -33,12 +38,9 @@ impl DatabaseChecker {
 impl Checker for DatabaseChecker {
     async fn check(&self) -> Result<CheckOutput, CheckError> {
         let start = Instant::now();
-        let result = tokio::time::timeout(
-            Duration::from_millis(self.timeout_ms),
-            self.run_probe(),
-        )
-        .await
-        .unwrap_or_else(|_| Err("connection timed out".to_string()));
+        let result = tokio::time::timeout(Duration::from_millis(self.timeout_ms), self.run_probe())
+            .await
+            .unwrap_or_else(|_| Err("connection timed out".to_string()));
         let elapsed = start.elapsed().as_millis() as u64;
 
         match result {
@@ -68,27 +70,13 @@ impl Checker for DatabaseChecker {
 impl DatabaseChecker {
     async fn run_probe(&self) -> Result<(), String> {
         use sqlx::Connection;
-        match self.driver {
-            "sqlite" => {
-                let mut conn = sqlx::SqliteConnection::connect(&self.connection_string)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                sqlx::query(&self.probe_query)
-                    .execute(&mut conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(())
-            }
-            _ => {
-                let mut conn = sqlx::PgConnection::connect(&self.connection_string)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                sqlx::query(&self.probe_query)
-                    .execute(&mut conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(())
-            }
-        }
+        let mut conn = sqlx::PgConnection::connect(&self.connection_string)
+            .await
+            .map_err(|e| e.to_string())?;
+        sqlx::query(&self.probe_query)
+            .execute(&mut conn)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }

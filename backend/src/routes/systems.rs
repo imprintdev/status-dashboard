@@ -7,7 +7,7 @@ use chrono::Utc;
 use uuid::Uuid;
 use crate::{
     error::AppError,
-    models::system::{CreateSystem, UpdateSystem},
+    models::system::{CreateSystem, System, UpdateSystem},
     state::AppState,
     ws::messages::WsMessage,
 };
@@ -15,9 +15,8 @@ use crate::{
 pub async fn list_systems(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
-    let rows = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", description, created_at as "created_at!", updated_at as "updated_at!"
-           FROM systems ORDER BY created_at ASC"#
+    let rows = sqlx::query_as::<_, System>(
+        "SELECT id, name, description, created_at, updated_at FROM systems ORDER BY created_at ASC",
     )
     .fetch_all(&state.db)
     .await?;
@@ -25,9 +24,10 @@ pub async fn list_systems(
     let mut result = Vec::with_capacity(rows.len());
     for r in &rows {
         let health = derive_health(&r.id, &state).await;
-        let count: i64 = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM service_systems WHERE system_id = ?", r.id
+        let count: i64 = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM service_systems WHERE system_id = $1",
         )
+        .bind(&r.id)
         .fetch_one(&state.db)
         .await?;
 
@@ -52,10 +52,14 @@ pub async fn create_system(
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
 
-    sqlx::query!(
-        "INSERT INTO systems (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        id, body.name, body.description, now, now
+    sqlx::query(
+        "INSERT INTO systems (id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
     )
+    .bind(&id)
+    .bind(&body.name)
+    .bind(&body.description)
+    .bind(&now)
+    .bind(&now)
     .execute(&state.db)
     .await?;
 
@@ -76,11 +80,10 @@ pub async fn update_system(
     Path(id): Path<String>,
     Json(body): Json<UpdateSystem>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let r = sqlx::query!(
-        r#"SELECT id as "id!", name as "name!", description, created_at as "created_at!", updated_at as "updated_at!"
-           FROM systems WHERE id = ?"#,
-        id
+    let r = sqlx::query_as::<_, System>(
+        "SELECT id, name, description, created_at, updated_at FROM systems WHERE id = $1",
     )
+    .bind(&id)
     .fetch_optional(&state.db)
     .await?
     .ok_or(AppError::NotFound)?;
@@ -89,12 +92,13 @@ pub async fn update_system(
     let description = body.description.or(r.description);
     let now = Utc::now().to_rfc3339();
 
-    sqlx::query!(
-        "UPDATE systems SET name = ?, description = ?, updated_at = ? WHERE id = ?",
-        name, description, now, id
-    )
-    .execute(&state.db)
-    .await?;
+    sqlx::query("UPDATE systems SET name = $1, description = $2, updated_at = $3 WHERE id = $4")
+        .bind(&name)
+        .bind(&description)
+        .bind(&now)
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
 
     let _ = state.tx.send(WsMessage::SystemUpdated {
         system_id: id.clone(),
@@ -108,8 +112,8 @@ pub async fn delete_system(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    // ON DELETE SET NULL handles reassigning services to ungrouped
-    let rows = sqlx::query!("DELETE FROM systems WHERE id = ?", id)
+    let rows = sqlx::query("DELETE FROM systems WHERE id = $1")
+        .bind(&id)
         .execute(&state.db)
         .await?
         .rows_affected();
@@ -122,16 +126,16 @@ pub async fn delete_system(
 }
 
 async fn derive_health(system_id: &str, state: &AppState) -> &'static str {
-    let statuses = sqlx::query!(
-        r#"SELECT status as "status!" FROM check_results
-           WHERE service_id IN (SELECT service_id FROM service_systems WHERE system_id = ?)
-           AND id IN (
-               SELECT id FROM check_results cr2
-               WHERE cr2.service_id = check_results.service_id
-               ORDER BY checked_at DESC LIMIT 1
-           )"#,
-        system_id
+    let statuses = sqlx::query_as::<_, (String,)>(
+        "SELECT status FROM check_results
+         WHERE service_id IN (SELECT service_id FROM service_systems WHERE system_id = $1)
+         AND id IN (
+             SELECT id FROM check_results cr2
+             WHERE cr2.service_id = check_results.service_id
+             ORDER BY checked_at DESC LIMIT 1
+         )",
     )
+    .bind(system_id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -141,11 +145,11 @@ async fn derive_health(system_id: &str, state: &AppState) -> &'static str {
     }
 
     let mut worst = "up";
-    for row in &statuses {
-        match row.status.as_str() {
-            "down"     => return "down",
+    for (status,) in &statuses {
+        match status.as_str() {
+            "down" => return "down",
             "degraded" => worst = "degraded",
-            _          => {}
+            _ => {}
         }
     }
     worst

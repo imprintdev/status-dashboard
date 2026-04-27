@@ -23,11 +23,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             msg = rx.recv() => {
                 match msg {
                     Ok(ws_msg) => {
-                        if let Ok(json) = serde_json::to_string(&ws_msg) {
-                            if sender.send(Message::Text(json)).await.is_err() {
+                        if let Ok(json) = serde_json::to_string(&ws_msg)
+                            && sender.send(Message::Text(json.into())).await.is_err() {
                                 break;
                             }
-                        }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         tracing::warn!("WebSocket client lagged by {} messages", n);

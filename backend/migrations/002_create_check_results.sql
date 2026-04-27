@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS check_results (
     service_id    TEXT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     checked_at    TEXT NOT NULL,
     status        TEXT NOT NULL,
-    response_ms   INTEGER,
+    response_ms   BIGINT,
     detail        TEXT,
     error_message TEXT
 );

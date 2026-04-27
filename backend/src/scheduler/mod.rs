@@ -1,29 +1,25 @@
-use sqlx::SqlitePool;
-use tokio::sync::broadcast;
 use crate::{state::SchedulerHandles, ws::messages::WsMessage};
+use sqlx::PgPool;
+use tokio::sync::broadcast;
 
 pub mod worker;
 
-pub async fn start_all(
-    db: &SqlitePool,
-    tx: broadcast::Sender<WsMessage>,
-    handles: &SchedulerHandles,
-) {
-    let services = sqlx::query!(r#"SELECT id as "id!" FROM services WHERE enabled = 1"#)
+pub async fn start_all(db: &PgPool, tx: broadcast::Sender<WsMessage>, handles: &SchedulerHandles) {
+    let services = sqlx::query_as::<_, (i64,)>(r#"SELECT id FROM services WHERE enabled = 1"#)
         .fetch_all(db)
         .await
         .unwrap_or_default();
 
     let mut map = handles.lock().await;
-    for svc in services {
-        let handle = tokio::spawn(supervised_loop(svc.id.clone(), db.clone(), tx.clone()));
-        map.insert(svc.id, handle);
+    for (id,) in services {
+        let handle = tokio::spawn(supervised_loop(id.to_string(), db.clone(), tx.clone()));
+        map.insert(id.to_string(), handle);
     }
 }
 
 pub async fn spawn_service(
     service_id: String,
-    db: &SqlitePool,
+    db: &PgPool,
     tx: broadcast::Sender<WsMessage>,
     handles: &SchedulerHandles,
 ) {
@@ -37,11 +33,7 @@ pub async fn spawn_service(
 
 /// Wraps `run_service_loop` so that an unexpected panic or early return causes
 /// a short backoff and restart rather than silently killing the worker.
-async fn supervised_loop(
-    service_id: String,
-    db: SqlitePool,
-    tx: broadcast::Sender<WsMessage>,
-) {
+async fn supervised_loop(service_id: String, db: PgPool, tx: broadcast::Sender<WsMessage>) {
     let mut backoff = std::time::Duration::from_secs(5);
     loop {
         let result = tokio::spawn(worker::run_service_loop(
@@ -56,7 +48,12 @@ async fn supervised_loop(
             Ok(()) => break,
             // Worker panicked — log and restart after backoff.
             Err(e) => {
-                tracing::error!("Worker for service {} panicked: {:?}; restarting in {:?}", service_id, e, backoff);
+                tracing::error!(
+                    "Worker for service {} panicked: {:?}; restarting in {:?}",
+                    service_id,
+                    e,
+                    backoff
+                );
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(std::time::Duration::from_secs(60));
             }
