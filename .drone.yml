@@ -7,7 +7,7 @@ platform:
   arch: amd64
 
 steps:
-  - name: build
+  - name: build-api
     image: rust:1.95.0-trixie
     environment:
       CARGO_NET_GIT_FETCH_WITH_CLI: true
@@ -17,9 +17,14 @@ steps:
       - cd backend && cargo build --release --locked
       - mv target/release/status-dashboard /drone/src/status-dashboard
       - rm -rf target
-      
-      - cd ..
-
+    
+  - name: build-front
+    image: node:trixie-slim
+    environment:
+      CARGO_NET_GIT_FETCH_WITH_CLI: true
+      GIT_SSH_KEY:
+        from_secret: deploy_ssh_key
+    commands:
       - cd frontend 
       - npm i && npm build 
       - mv dist /drone/src/status-dashboard/dist
@@ -41,7 +46,8 @@ steps:
         - "${DRONE_COMMIT_SHA:0:8}"
         - "latest"
     depends_on:
-      - build
+      - build-front
+      - build-api
     when:
       branch:
         - main
