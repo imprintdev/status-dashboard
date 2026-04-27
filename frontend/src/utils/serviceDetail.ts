@@ -29,6 +29,7 @@ export function checkStats(serviceType: string, rawDetail: unknown, ms: number |
 
   switch (serviceType) {
     case 'http':
+    case 'http_body':
       return [
         ...(detail?.http_status != null ? [{ label: 'HTTP', value: String(detail.http_status) }] : []),
         { label: 'time', value: fmtMs(ms) },

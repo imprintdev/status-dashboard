@@ -7,6 +7,7 @@ pub mod aws_billing;
 pub mod chart_query;
 pub mod database;
 pub mod http;
+pub mod http_body;
 pub mod php_site;
 pub mod preflight;
 pub mod sql_query;
@@ -56,6 +57,7 @@ pub fn build_checker(
 ) -> Result<Box<dyn Checker>, ConfigError> {
     match service_type {
         "http" => Ok(Box::new(http::HttpChecker::from_config(config)?)),
+        "http_body" => Ok(Box::new(http_body::HttpBodyChecker::from_config(config)?)),
         "database" => Ok(Box::new(database::DatabaseChecker::from_config(config)?)),
         "aws_billing" => Ok(Box::new(aws_billing::AwsBillingChecker::from_config(config)?)),
         "php_site" => Ok(Box::new(php_site::PhpSiteChecker::from_config(config)?)),

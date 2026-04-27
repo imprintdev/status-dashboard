@@ -8,6 +8,15 @@ const props = defineProps<{ service: Service }>()
 const emit  = defineEmits<{ select: [id: string] }>()
 
 const isChart = () => props.service.service_type === 'chart_query'
+const isHttpBody = () => props.service.service_type === 'http_body'
+
+function cardBody(): string | null {
+  const detail = props.service.latest_check?.detail
+  if (!detail) return null
+  const d = typeof detail === 'string' ? (() => { try { return JSON.parse(detail) } catch { return null } })() : detail
+  const body = (d as Record<string, unknown>)?.body
+  return typeof body === 'string' ? body : null
+}
 
 const statusClass = () => {
   const s = props.service.latest_check?.status
@@ -51,8 +60,26 @@ const fmtType = (t: string) => t.replace(/_/g, ' ')
         <span class="stat-value">{{ stat.value }}</span>
       </span>
     </div>
+    <pre v-if="isHttpBody() && cardBody()" class="card-body-pre">{{ cardBody() }}</pre>
     <div v-if="!service.enabled" class="card-meta">
       <span style="color: var(--color-degraded)">Disabled</span>
     </div>
   </div>
 </template>
+
+<style scoped>
+.card-body-pre {
+  font-size: 11px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  margin: 6px 0 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+</style>
