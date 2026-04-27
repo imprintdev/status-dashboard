@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use crate::{error::AppError, models::check_result::CheckResult, state::AppState};
 
@@ -13,7 +14,7 @@ pub async fn list_checks(
     let limit: i64 = params.get("limit").and_then(|v| v.parse().ok()).unwrap_or(50);
 
     let results = if let Some(before_id) = params.get("before_id") {
-        let before_at = sqlx::query_scalar::<_, String>(
+        let before_at = sqlx::query_scalar::<_, DateTime<Utc>>(
             "SELECT checked_at FROM check_results WHERE id = $1",
         )
         .bind(before_id)
@@ -27,7 +28,7 @@ pub async fn list_checks(
                  ORDER BY checked_at DESC LIMIT $3",
             )
             .bind(&service_id)
-            .bind(&at)
+            .bind(at)
             .bind(limit)
             .fetch_all(&state.db)
             .await?

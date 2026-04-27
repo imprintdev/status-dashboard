@@ -1,16 +1,16 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-#[allow(dead_code)]
 pub struct Service {
     pub id: String,
     pub name: String,
     pub service_type: String,
     pub config: String,
     pub interval_secs: i64,
-    pub enabled: i64,
-    pub created_at: String,
-    pub updated_at: String,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]

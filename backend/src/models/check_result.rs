@@ -1,10 +1,11 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CheckResult {
     pub id: String,
     pub service_id: String,
-    pub checked_at: String,
+    pub checked_at: DateTime<Utc>,
     pub status: String,
     pub response_ms: Option<i64>,
     pub detail: Option<String>,

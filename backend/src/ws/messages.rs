@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6,7 +7,7 @@ pub enum WsMessage {
     CheckCompleted {
         service_id: String,
         check_id: String,
-        checked_at: String,
+        checked_at: DateTime<Utc>,
         status: String,
         response_ms: Option<i64>,
         detail: Option<serde_json::Value>,
@@ -15,13 +16,13 @@ pub enum WsMessage {
     IncidentOpened {
         incident_id: String,
         service_id: String,
-        started_at: String,
+        started_at: DateTime<Utc>,
         trigger_status: String,
     },
     IncidentResolved {
         incident_id: String,
         service_id: String,
-        resolved_at: String,
+        resolved_at: DateTime<Utc>,
     },
     ServiceUpdated {
         service_id: String,
@@ -32,6 +33,6 @@ pub enum WsMessage {
         fields: serde_json::Value,
     },
     Ping {
-        ts: String,
+        ts: DateTime<Utc>,
     },
 }

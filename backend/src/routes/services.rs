@@ -64,7 +64,7 @@ pub async fn list_services(
             "service_type": r.service_type,
             "config": serde_json::from_str::<serde_json::Value>(&r.config).unwrap_or(serde_json::Value::Null),
             "interval_secs": r.interval_secs,
-            "enabled": r.enabled == 1,
+            "enabled": r.enabled,
             "system_ids": system_ids,
             "created_at": r.created_at,
             "updated_at": r.updated_at,
@@ -101,7 +101,7 @@ pub async fn get_service(
         "service_type": r.service_type,
         "config": serde_json::from_str::<serde_json::Value>(&r.config).unwrap_or(serde_json::Value::Null),
         "interval_secs": r.interval_secs,
-        "enabled": r.enabled == 1,
+        "enabled": r.enabled,
         "system_ids": system_ids,
         "created_at": r.created_at,
         "updated_at": r.updated_at
@@ -113,7 +113,7 @@ pub async fn create_service(
     Json(body): Json<CreateService>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
     let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
     let interval = body.interval_secs.unwrap_or(60);
     let config_str = body.config.to_string();
 
@@ -122,15 +122,15 @@ pub async fn create_service(
 
     sqlx::query(
         "INSERT INTO services (id, name, service_type, config, interval_secs, enabled, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 1, $6, $7)",
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7)",
     )
     .bind(&id)
     .bind(&body.name)
     .bind(&body.service_type)
     .bind(&config_str)
     .bind(interval)
-    .bind(&now)
-    .bind(&now)
+    .bind(now)
+    .bind(now)
     .execute(&state.db)
     .await?;
 
@@ -170,8 +170,8 @@ pub async fn update_service(
     let name = body.name.unwrap_or(r.name);
     let config_str = body.config.as_ref().map(|c| c.to_string()).unwrap_or(r.config);
     let interval = body.interval_secs.unwrap_or(r.interval_secs);
-    let enabled: i64 = body.enabled.map(|e| e as i64).unwrap_or(r.enabled);
-    let now = Utc::now().to_rfc3339();
+    let enabled = body.enabled.unwrap_or(r.enabled);
+    let now = Utc::now();
 
     sqlx::query(
         "UPDATE services SET name = $1, config = $2, interval_secs = $3, enabled = $4, updated_at = $5 WHERE id = $6",
@@ -180,7 +180,7 @@ pub async fn update_service(
     .bind(&config_str)
     .bind(interval)
     .bind(enabled)
-    .bind(&now)
+    .bind(now)
     .bind(&id)
     .execute(&state.db)
     .await?;
@@ -201,7 +201,7 @@ pub async fn update_service(
         }
     }
 
-    if enabled == 1 {
+    if enabled {
         scheduler::spawn_service(id.clone(), &state.db, state.tx.clone(), &state.scheduler_handles).await;
     } else {
         scheduler::abort_service(&id, &state.scheduler_handles).await;
@@ -220,7 +220,7 @@ pub async fn update_service(
         fields: serde_json::json!({
             "name": name,
             "interval_secs": interval,
-            "enabled": enabled == 1,
+            "enabled": enabled,
             "system_ids": effective_system_ids
         }),
     });
@@ -258,13 +258,13 @@ pub async fn get_uptime(
         "90d" => 90,
         _ => 7,
     };
-    let since = (Utc::now() - chrono::Duration::days(days)).to_rfc3339();
+    let since = Utc::now() - chrono::Duration::days(days);
 
     let total: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM check_results WHERE service_id = $1 AND checked_at >= $2",
     )
     .bind(&id)
-    .bind(&since)
+    .bind(since)
     .fetch_one(&state.db)
     .await?;
 
@@ -272,7 +272,7 @@ pub async fn get_uptime(
         "SELECT COUNT(*) FROM check_results WHERE service_id = $1 AND checked_at >= $2 AND status = 'up'",
     )
     .bind(&id)
-    .bind(&since)
+    .bind(since)
     .fetch_one(&state.db)
     .await?;
 

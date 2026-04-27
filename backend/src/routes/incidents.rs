@@ -31,13 +31,13 @@ pub async fn resolve_incident(
     Path((service_id, incident_id)): Path<(String, String)>,
     Json(body): Json<ResolveIncident>,
 ) -> Result<Json<Incident>, AppError> {
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
 
     let rows = sqlx::query(
         "UPDATE incidents SET resolved_at = $1, status = 'resolved', notes = $2
          WHERE id = $3 AND service_id = $4 AND status = 'open'",
     )
-    .bind(&now)
+    .bind(now)
     .bind(&body.notes)
     .bind(&incident_id)
     .bind(&service_id)

@@ -50,7 +50,7 @@ pub async fn create_system(
     Json(body): Json<CreateSystem>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
     let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
 
     sqlx::query(
         "INSERT INTO systems (id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
@@ -58,8 +58,8 @@ pub async fn create_system(
     .bind(&id)
     .bind(&body.name)
     .bind(&body.description)
-    .bind(&now)
-    .bind(&now)
+    .bind(now)
+    .bind(now)
     .execute(&state.db)
     .await?;
 
@@ -90,12 +90,12 @@ pub async fn update_system(
 
     let name = body.name.unwrap_or(r.name);
     let description = body.description.or(r.description);
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
 
     sqlx::query("UPDATE systems SET name = $1, description = $2, updated_at = $3 WHERE id = $4")
         .bind(&name)
         .bind(&description)
-        .bind(&now)
+        .bind(now)
         .bind(&id)
         .execute(&state.db)
         .await?;
@@ -126,14 +126,12 @@ pub async fn delete_system(
 }
 
 async fn derive_health(system_id: &str, state: &AppState) -> &'static str {
+    // DISTINCT ON gives exactly one row per service_id, the most recent by checked_at
     let statuses = sqlx::query_as::<_, (String,)>(
-        "SELECT status FROM check_results
+        "SELECT DISTINCT ON (service_id) status
+         FROM check_results
          WHERE service_id IN (SELECT service_id FROM service_systems WHERE system_id = $1)
-         AND id IN (
-             SELECT id FROM check_results cr2
-             WHERE cr2.service_id = check_results.service_id
-             ORDER BY checked_at DESC LIMIT 1
-         )",
+         ORDER BY service_id, checked_at DESC",
     )
     .bind(system_id)
     .fetch_all(&state.db)

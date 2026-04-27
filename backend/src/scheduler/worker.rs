@@ -3,13 +3,15 @@ use crate::{
     models::{check_result::CheckStatus, incident::Incident, service::Service},
     ws::messages::WsMessage,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+const DEFAULT_INTERVAL_SECS: u64 = 60;
+
 pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sender<WsMessage>) {
-    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(DEFAULT_INTERVAL_SECS));
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
@@ -35,7 +37,7 @@ pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sen
             }
         };
 
-        if row.enabled == 0 {
+        if !row.enabled {
             tracing::info!("Service {} disabled, stopping worker", service_id);
             break;
         }
@@ -77,7 +79,7 @@ pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sen
         };
 
         let check_id = Uuid::new_v4().to_string();
-        let checked_at = Utc::now().to_rfc3339();
+        let checked_at: DateTime<Utc> = Utc::now();
         let status_str = output.status.as_str().to_string();
         let response_ms = output.response_ms.map(|v| v as i64);
         let detail_str = output.detail.as_ref().map(|v| v.to_string());
@@ -88,7 +90,7 @@ pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sen
         )
         .bind(&check_id)
         .bind(&service_id)
-        .bind(&checked_at)
+        .bind(checked_at)
         .bind(&status_str)
         .bind(response_ms)
         .bind(&detail_str)
@@ -99,7 +101,7 @@ pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sen
             tracing::error!("Failed to persist check result for {}: {}", service_id, e);
         }
 
-        handle_incident(&service_id, &output.status, &checked_at, &db, &tx).await;
+        handle_incident(&service_id, &output.status, checked_at, &db, &tx).await;
 
         let _ = tx.send(WsMessage::CheckCompleted {
             service_id: service_id.clone(),
@@ -116,7 +118,7 @@ pub async fn run_service_loop(service_id: String, db: PgPool, tx: broadcast::Sen
 async fn handle_incident(
     service_id: &str,
     new_status: &CheckStatus,
-    now: &str,
+    now: DateTime<Utc>,
     db: &PgPool,
     tx: &broadcast::Sender<WsMessage>,
 ) {
@@ -149,7 +151,7 @@ async fn handle_incident(
             let _ = tx.send(WsMessage::IncidentOpened {
                 incident_id,
                 service_id: service_id.to_string(),
-                started_at: now.to_string(),
+                started_at: now,
                 trigger_status: trigger,
             });
         }
@@ -165,7 +167,7 @@ async fn handle_incident(
             let _ = tx.send(WsMessage::IncidentResolved {
                 incident_id: incident.id,
                 service_id: service_id.to_string(),
-                resolved_at: now.to_string(),
+                resolved_at: now,
             });
         }
 

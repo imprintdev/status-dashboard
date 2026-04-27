@@ -14,9 +14,6 @@ pub enum AppError {
     NotFound,
     #[error("Bad request: {0}")]
     BadRequest(String),
-    #[error("Internal error: {0}")]
-    #[allow(dead_code)]
-    Internal(String),
 }
 
 impl IntoResponse for AppError {
@@ -24,7 +21,7 @@ impl IntoResponse for AppError {
         let (status, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::Db(_) | AppError::Internal(_) => {
+            AppError::Db(_) => {
                 tracing::error!("{}", self);
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }

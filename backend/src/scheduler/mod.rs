@@ -5,15 +5,15 @@ use tokio::sync::broadcast;
 pub mod worker;
 
 pub async fn start_all(db: &PgPool, tx: broadcast::Sender<WsMessage>, handles: &SchedulerHandles) {
-    let services = sqlx::query_as::<_, (i64,)>(r#"SELECT id FROM services WHERE enabled = 1"#)
+    let services = sqlx::query_scalar::<_, String>("SELECT id FROM services WHERE enabled = TRUE")
         .fetch_all(db)
         .await
         .unwrap_or_default();
 
     let mut map = handles.lock().await;
-    for (id,) in services {
-        let handle = tokio::spawn(supervised_loop(id.to_string(), db.clone(), tx.clone()));
-        map.insert(id.to_string(), handle);
+    for id in services {
+        let handle = tokio::spawn(supervised_loop(id.clone(), db.clone(), tx.clone()));
+        map.insert(id, handle);
     }
 }
 
