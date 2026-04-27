@@ -26,7 +26,7 @@ async fn main() {
     let cfg = config::Config::from_env();
 
     let pool = db::create_pool(&cfg.database_url).await;
-    db::run_migrations(&pool).await;
+    // db::run_migrations(&pool).await;
 
     let app_state = AppState::new(pool.clone());
 
@@ -54,22 +54,19 @@ async fn main() {
             let check_cutoff = Utc::now() - chrono::Duration::days(CHECK_RESULT_RETENTION_DAYS);
             let incident_cutoff = Utc::now() - chrono::Duration::days(INCIDENT_RETENTION_DAYS);
 
-            if let Err(e) = sqlx::query(
-                "DELETE FROM check_results WHERE checked_at < $1",
-            )
-            .bind(check_cutoff)
-            .execute(&retention_db)
-            .await
+            if let Err(e) = sqlx::query("DELETE FROM check_results WHERE checked_at < $1")
+                .bind(check_cutoff)
+                .execute(&retention_db)
+                .await
             {
                 tracing::error!("check_results retention failed: {e}");
             }
 
-            if let Err(e) = sqlx::query(
-                "DELETE FROM incidents WHERE status = 'resolved' AND resolved_at < $1",
-            )
-            .bind(incident_cutoff)
-            .execute(&retention_db)
-            .await
+            if let Err(e) =
+                sqlx::query("DELETE FROM incidents WHERE status = 'resolved' AND resolved_at < $1")
+                    .bind(incident_cutoff)
+                    .execute(&retention_db)
+                    .await
             {
                 tracing::error!("incidents retention failed: {e}");
             }

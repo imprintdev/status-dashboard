@@ -15,6 +15,7 @@ pub async fn create_pool(database_url: &str) -> PgPool {
         .expect("Failed to connect to database")
 }
 
+#[allow(unused)]
 pub async fn run_migrations(pool: &PgPool) {
     sqlx::migrate!("./migrations")
         .run(pool)
