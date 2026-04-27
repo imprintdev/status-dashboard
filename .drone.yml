@@ -29,13 +29,35 @@ steps:
       - npm i && npm run build 
       - rm -rf node_modules
 
-  - name: container
+  - name: container-web
     image: plugins/ecr
     settings:
-      repo: status-dashboard
+      repo: status-dashboard-web
       registry: 347260228192.dkr.ecr.eu-west-2.amazonaws.com
       region: eu-west-2
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.web
+      context: .
+      access_key:
+        from_secret: aws_access_key
+      secret_key:
+        from_secret: aws_secret_access_key
+      tags:
+        - "${DRONE_COMMIT_SHA:0:8}"
+        - "latest"
+    depends_on:
+      - build-front
+      - build-api
+    when:
+      branch:
+        - main
+
+  - name: container-api
+    image: plugins/ecr
+    settings:
+      repo: status-dashboard-api
+      registry: 347260228192.dkr.ecr.eu-west-2.amazonaws.com
+      region: eu-west-2
+      dockerfile: Dockerfile.api
       context: .
       access_key:
         from_secret: aws_access_key
@@ -67,14 +89,16 @@ steps:
       - mv yq_linux_amd64 /usr/bin/yq
 
       - cd kubernetes-config/status-dashboard
-      - yq -i '.spec.template.spec.containers[0].image = "347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard:${DRONE_COMMIT_SHA:0:8}"' deployment.yaml
+      - yq -i '.spec.template.spec.containers[0].image = "347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard-web:${DRONE_COMMIT_SHA:0:8}"' web/deployment.yaml
+      - yq -i '.spec.template.spec.containers[0].image = "347260228192.dkr.ecr.eu-west-2.amazonaws.com/status-dashboard-api:${DRONE_COMMIT_SHA:0:8}"' api/deployment.yaml
 
       # commit
       - git add .
       - git commit --author="Drone CI Pipeline <noreply@drone>" -m "pipeline deploy status-dashboard ${DRONE_COMMIT_SHA:0:8}"
       - git push
     depends_on:
-      - container
+      - container-web
+      - container-api
     when:
       event:
         - push
